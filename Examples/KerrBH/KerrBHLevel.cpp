@@ -6,7 +6,7 @@
 #include "KerrBHLevel.hpp"
 
 #include "AlgebraicConstraintsEnforcer.hpp"
-#include "BinaryBHInitialData.hpp" // Change to KerrInitialData.hpp once ported
+#include "KerrBHInitialData.hpp" // Change to KerrInitialData.hpp once ported
 #include "CCZ4RHS.hpp"
 #include "ChiTagger.hpp"
 #include "Constraints.hpp"
@@ -112,8 +112,8 @@ void KerrBHLevel::initData()
 #else
     // Set up the compute class for the KerrBH initial data
     amrex::Real dx = Geom().CellSize(0);
-    BinaryBHInitialData kerr_initial_data(dx); // <<< change to Kerr Initial Data once ported
-    static_assert(std::is_trivially_copyable_v<BinaryBHInitialData>,
+    KerrBHInitialData kerr_initial_data(dx); // <<< change to Kerr Initial Data once ported
+    static_assert(std::is_trivially_copyable_v<KerrBHInitialData>,
                   "KerrBHInitialData needs to be device copyable"); // <<< change to Kerr Initial Data once ported
 
     // First set everything to zero (to avoid undefinded values in constraints)
