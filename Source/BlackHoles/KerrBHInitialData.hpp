@@ -22,27 +22,25 @@ class KerrBHInitialData
     //! Struct for the params of the Kerr BHInitialData
     struct params_t
     {
-        amrex::Real mass; //!<< The mass of the Kerr BH
-        std::array<amrex::Real, AMREX_SPACEDIM> center; //!< The center of the Kerr BH
-        amrex::Real spin; //!< The spin param a = J/M, so 0 <= |a| <= M
+        amrex::Real mass{}; //!<< The mass of the Kerr BH
+        std::array<amrex::Real, AMREX_SPACEDIM> center{}; //!< The center of the Kerr BH
+        amrex::Real spin{}; //!< The spin param a = J/M, so 0 <= |a| <= M
+        std::array<amrex::Real, AMREX_SPACEDIM> spin_direction = {
+            0., 0., 1.}; // default to 'z' axis;
+        
+        static void check_params();
+        inline void fill_params();
     };
 
   protected:
     amrex::Real m_dx;
     params_t m_params;
+    Tensor::Rank2 m_R;
 
   public:
     // NOLINTBEGIN(bugprone-easily-swappable-parameters)
     AMREX_FORCE_INLINE
-    KerrBHInitialData(params_t a_params, amrex::Real a_dx)
-        : m_dx(a_dx), m_params(a_params)
-    {
-        // check this spin param is sensible
-        if (std::abs(m_params.spin) > m_params.mass)
-        {
-            amrex::Abort("The spin parameter must satisfy |a| <= M");
-        }
-    }
+    KerrBHInitialData(amrex::Real a_dx);
     // NOLINTEND(bugprone-easily-swappable-parameters)
 
     AMREX_GPU_DEVICE void
@@ -52,11 +50,15 @@ class KerrBHInitialData
   protected:
     //! Function which computes the components of the metric in spherical coords
     AMREX_FORCE_INLINE AMREX_GPU_DEVICE void 
-    compute_kerr(Tensor::Rank2 &spherical_g, //!<< The spatial metric in spherical coords
-                 Tensor::Rank2 &spherical_K, //!<< The extrinsic curvature in spherical coords
+    compute_kerr(Tensor::Sym12Rank2 &spherical_g, //!<< The spatial metric in spherical coords
+                 Tensor::Sym12Rank2 &spherical_K, //!<< The extrinsic curvature in spherical coords
                  Tensor::Rank1 &spherical_shift, //!<< The spherical components of the shift
                  amrex::Real &kerr_lapse, //!<< The lapse for the kerr solution
-                 const Coordinates coords) const;
+                 const Tensor::Rank1 &coords) const;
+
+    //! Helper function to unpack a Sym12Rank2 into a full 3x3 Rank2
+    [[nodiscard]] AMREX_FORCE_INLINE AMREX_GPU_DEVICE Tensor::Rank2
+    to_rank2(const Tensor::Sym12Rank2& sym) const;
 };
 
 #include "KerrBHInitialData.impl.hpp"

@@ -18,12 +18,9 @@ class KerrBHLevel : public GRAmrLevel
     // Inherit the contructors from GRAmrLevel
     using GRAmrLevel::GRAmrLevel;
 
-    static constexpr int num_punctures = 2;
+    static constexpr int num_punctures = 0;
 
     BHAmr<num_punctures> *get_bh_amr_ptr();
-
-    /// Get a reference to the PunctureTracker object stored by BHAmr
-    PunctureTracker<num_punctures> &get_puncture_tracker();
 
     /// Things to do at every full timestep
     ///(might include several substeps, e.g. in RK4)

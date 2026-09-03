@@ -6,29 +6,20 @@
 #include "KerrBHLevel.hpp"
 
 #include "AlgebraicConstraintsEnforcer.hpp"
-#include "KerrBHInitialData.hpp" // Change to KerrInitialData.hpp once ported
+#include "KerrBHInitialData.hpp"
 #include "CCZ4RHS.hpp"
 #include "ChiTagger.hpp"
 #include "Constraints.hpp"
 #include "ExtractionTagger.hpp"
 #include "FourthOrderDerivatives.hpp"
 #include "PositiveChiAndLapse.hpp"
-#include "PunctureTagger.hpp"
-#include "PunctureTracker.hpp"
 #include "SixthOrderDerivatives.hpp"
-#include "TwoPuncturesInitialData.hpp"
 #include "Weyl4.hpp"
 #include "WeylExtraction.hpp"
 
 BHAmr<KerrBHLevel::num_punctures> *KerrBHLevel::get_bh_amr_ptr()
 {
     return dynamic_cast<BHAmr<num_punctures> *>(get_gr_amr_ptr());
-}
-
-PunctureTracker<KerrBHLevel::num_punctures> &
-KerrBHLevel::get_puncture_tracker()
-{
-    return get_bh_amr_ptr()->get_puncture_tracker();
 }
 
 void KerrBHLevel::variableSetUp()
@@ -64,8 +55,7 @@ void KerrBHLevel::specific_advance()
                        });
 }
 
-// This initial data uses an approximation for the metric which
-// is valid for small boosts
+// Initial Data setup for the Kerr Black Hole
 void KerrBHLevel::initData()
 {
     BL_PROFILE("KerrBHLevel::initData");
@@ -73,48 +63,12 @@ void KerrBHLevel::initData()
     {
         amrex::Print() << "KerrBHLevel::initData " << Level() << "\n";
     }
-#ifdef USE_TWOPUNCTURES
-    TwoPuncturesInitialData two_punctures_initial_data(Geom().CellSize(0));
 
-    two_punctures_initial_data.solve(); // only solves first time
-
-    amrex::MultiFab &state_new = get_new_data(state_index);
-#ifdef AMREX_USE_GPU
-    amrex::MFInfo mf_info;
-    mf_info.SetArena(amrex::The_Cpu_Arena());
-    amrex::MultiFab host_state(state_new.boxArray(),
-                               state_new.DistributionMap(), state_new.nComp(),
-                               state_new.nGrowVect(), mf_info);
-#else
-    amrex::MultiFab &host_state = state_new;
-#endif
-
-#ifdef AMREX_USE_OMP
-#pragma omp parallel if (amrex::Gpu::notInLaunchRegion())
-#endif
-    for (amrex::MFIter mfi(state_new, amrex::TilingIfNotGPU()); mfi.isValid();
-         ++mfi)
-    {
-        const amrex::Box &grown_tile_box = mfi.growntilebox();
-        const auto &state_array          = host_state.array(mfi);
-
-        amrex::LoopOnCpu(
-            grown_tile_box, [=](int ix, int iy, int iz)
-            { two_punctures_initial_data(ix, iy, iz, state_array); });
-#ifdef AMREX_USE_GPU
-        // Copy to device
-        amrex::Gpu::htod_memcpy_async(
-            state_new[mfi].dataPtr(), host_state[mfi].dataPtr(),
-            host_state[mfi].size() * sizeof(amrex::Real));
-#endif
-    }
-
-#else
     // Set up the compute class for the KerrBH initial data
     amrex::Real dx = Geom().CellSize(0);
-    KerrBHInitialData kerr_initial_data(dx); // <<< change to Kerr Initial Data once ported
+    KerrBHInitialData kerr_initial_data(dx);
     static_assert(std::is_trivially_copyable_v<KerrBHInitialData>,
-                  "KerrBHInitialData needs to be device copyable"); // <<< change to Kerr Initial Data once ported
+                  "KerrBHInitialData needs to be device copyable"); 
 
     // First set everything to zero (to avoid undefinded values in constraints)
     // then calculate initial data
@@ -132,28 +86,8 @@ void KerrBHLevel::initData()
                            kerr_initial_data(ix, iy, iz,
                                                state_arrays[box_no]);
                        });
-#endif
+
     amrex::Gpu::streamSynchronize();
-
-    if (get_bh_amr_ptr()->puncture_tracking_enabled() && Level() == 0)
-    {
-        // need to set the puncture coordinates as we use it for the puncture
-        // tagging
-        BoostedBHInitialData::params_t bh1_params(1);
-        BoostedBHInitialData::params_t bh2_params(2);
-#ifdef USE_TWOPUNCTURES
-        two_punctures_initial_data.set_bh_params(bh1_params, bh2_params);
-#else
-        bh1_params.fill_params();
-        bh2_params.fill_params();
-#endif
-
-        get_puncture_tracker().set_puncture_coords(
-            {bh1_params.center[0], bh1_params.center[1], bh1_params.center[2],
-             bh2_params.center[0], bh2_params.center[1], bh2_params.center[2]});
-        // can't call start_from_initial_punctures() because we need the full
-        // AMR grid first
-    }
 }
 
 // Calculate RHS during RK4 substeps
@@ -300,31 +234,10 @@ void KerrBHLevel::tag_cells(amrex::TagBoxArray &a_tag_box_array,
 
     ChiTagger chi_tagger(Geom().CellSize(0), a_regrid_threshold);
 
-    GRParmParse pp;
     spherical_extraction_params_t extraction_params("weyl_extraction");
     extraction_params.fill_params();
     ExtractionTagger extraction_tagger(Geom().CellSize(0), Level(),
                                        extraction_params);
-
-    constexpr auto num_puncture_coords =
-        static_cast<std::size_t>(AMREX_SPACEDIM * num_punctures);
-    std::array<amrex::Real, num_puncture_coords> puncture_coords{};
-    const bool puncture_tracking_enabled =
-        get_bh_amr_ptr()->puncture_tracking_enabled();
-
-    if (puncture_tracking_enabled)
-    {
-        puncture_coords = get_puncture_tracker().get_puncture_coords();
-    }
-
-    amrex::Real bh1_mass{};
-    amrex::Real bh2_mass{};
-    pp.get("bh1.mass", bh1_mass);
-    pp.get("bh2.mass", bh2_mass);
-
-    PunctureTagger<num_punctures> puncture_tagger(
-        Geom().CellSize(0), Level(), get_gr_amr_ptr()->maxLevel(),
-        puncture_coords, {bh1_mass, bh2_mass});
 
     amrex::ParallelFor(state_new, amrex::IntVect(0),
                        [=] AMREX_GPU_DEVICE(int box_no, int ix, int iy, int iz)
@@ -333,11 +246,6 @@ void KerrBHLevel::tag_cells(amrex::TagBoxArray &a_tag_box_array,
                                       state_const_arrays[box_no]);
 
                            extraction_tagger(ix, iy, iz, tag_arrays[box_no]);
-
-                           if (puncture_tracking_enabled)
-                           {
-                               puncture_tagger(ix, iy, iz, tag_arrays[box_no]);
-                           }
                        });
 
     amrex::Gpu::streamSynchronize();
@@ -347,70 +255,29 @@ void KerrBHLevel::specific_post_init()
 {
     BL_PROFILE("KerrBHLevel::specific_post_init()");
 
-    if (get_bh_amr_ptr()->puncture_tracking_enabled() && Level() == 0)
-    {
-        get_puncture_tracker().start_from_initial_punctures();
-    }
 }
 
 void KerrBHLevel::specific_post_restart()
 {
     BL_PROFILE("KerrBHLevel::specific_post_restart()");
 
-    if (get_bh_amr_ptr()->puncture_tracking_enabled() && Level() == 0)
-    {
-        std::string restart_checkpoint{};
-        GRParmParse pp("amr");
-        pp.get("restart", restart_checkpoint);
-        get_puncture_tracker().restart(restart_checkpoint);
-    }
 }
 
 void KerrBHLevel::specific_post_plotfile(const std::string &a_dir,
                                            std::ostream &a_os)
 {
-    if (get_bh_amr_ptr()->puncture_tracking_enabled() && Level() == 0)
-    {
-        get_puncture_tracker().write_plotfile(a_dir);
-    }
+    BL_PROFILE("KerrBHLevel::specific_post_plotfile()");
 }
 
 void KerrBHLevel::specific_post_checkpoint(const std::string &a_chk_dir,
                                              std::ostream & /*a_os*/)
 {
-    if (get_bh_amr_ptr()->puncture_tracking_enabled() && Level() == 0)
-    {
-        get_puncture_tracker().checkpoint(a_chk_dir);
-    }
+    BL_PROFILE("KerrBHLevel::specific_post_checkpoint()");
 }
 
 void KerrBHLevel::specific_post_timestep()
 {
     BL_PROFILE("KerrBHLevel::specific_post_timestep");
-
-    if (get_bh_amr_ptr()->puncture_tracking_enabled())
-    {
-        GRParmParse puncture_tracking_pp("puncture_tracking");
-        int puncture_tracking_level{};
-        puncture_tracking_pp.get("level", puncture_tracking_level);
-        int puncture_tracking_writeout_level{};
-        puncture_tracking_pp.get("writeout_level",
-                                 puncture_tracking_writeout_level);
-
-        // do puncture tracking on requested level
-        if (Level() == puncture_tracking_level)
-        {
-            BL_PROFILE("PunctureTracking");
-
-            // only do the write out when we're at at a multiple of the
-            // writeout_level
-            bool write_punctures =
-                at_level_timestep_multiple(puncture_tracking_writeout_level);
-            amrex::Real current_time = get_state_data(state_index).curTime();
-            amrex::Real dt           = get_gr_amr_ptr()->dtLevel(Level());
-            get_puncture_tracker().track(current_time, dt, write_punctures);
-        }
-    }
 
     spherical_extraction_params_t extraction_params("weyl_extraction");
     extraction_params.fill_params();
