@@ -7,9 +7,9 @@
 
 #include "AlgebraicConstraintsEnforcer.hpp"
 #include "CCZ4RHS.hpp"
-#include "ChiTagger.hpp"
+
 #include "Constraints.hpp"
-#include "ExtractionTagger.hpp"
+#include "FixedGridsTagger.hpp"
 #include "FourthOrderDerivatives.hpp"
 #include "KerrBHInitialData.hpp"
 #include "PositiveChiAndLapse.hpp"
