@@ -11,7 +11,7 @@
 
 // Problem specific includes:
 #include "CCZ4RHS.hpp"
-#include "ExtractionTagger.hpp"
+#include "FixedGridsTagger.hpp"
 #include "KerrBHInitialData.hpp"
 #include "MovingPunctureGauge.hpp"
 #include "SphericalExtractionParameters.hpp"
@@ -28,7 +28,7 @@ class SimulationParameters
 
         CCZ4_params_t::check_params();
         MovingPunctureGauge<FourthOrderDerivatives>::params_t::check_params();
-        ExtractionTagger::check_params();
+        FixedGridsTagger::check_params();
 
         KerrBHInitialData::params_t::check_params();
 
