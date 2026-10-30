@@ -10,6 +10,7 @@
 #ifndef KERRBHINITIALDATA_IMPL_HPP_
 #define KERRBHINITIALDATA_IMPL_HPP_
 
+#include "ArrayTools.hpp"
 #include "CCZ4Vars.hpp"
 #include "DimensionDefinitions.hpp"
 #include "GRParmParse.hpp"
@@ -28,6 +29,17 @@ inline void KerrBHInitialData::params_t::check_params()
     if (std::abs(check_spin) > check_mass)
     {
         amrex::Abort("The spin parameter must satisfy |a| <= M");
+    }
+
+    // A zero spin direction gives NaNs in the rotation matrix
+    if (kerr_pp.contains("spin_direction"))
+    {
+        std::array<amrex::Real, AMREX_SPACEDIM> check_spin_direction{};
+        kerr_pp.get("spin_direction", check_spin_direction);
+        if (ArrayTools::norm2(check_spin_direction) == 0.0)
+        {
+            kerr_pp.error("spin_direction", "must be a non-zero vector");
+        }
     }
 
     // Ensure we don't crash if geometry.center is missing from params.txt
