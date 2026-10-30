@@ -162,9 +162,9 @@ KerrBHInitialData::operator()(int ix, int iy, int iz,
     amrex::Real lapse = pow(chi, 0.5);
 
     // Populate the variables on the grid
-    // NB We still need to set Gamma^i which is NON ZERO
-    // but we do this via a separate class/compute function
-    // as we need the gradients of the metric which are not yet available
+    // NB We still need to set Gamma^i which is NON ZERO, but this needs the
+    // gradients of the metric, which are not yet available, so it must be
+    // calculated afterwards with GammaCalculator (as in the KerrBH example)
     state_cell_data[c_chi]   = chi;
     state_cell_data[c_K]     = K;
     state_cell_data[c_lapse] = lapse;

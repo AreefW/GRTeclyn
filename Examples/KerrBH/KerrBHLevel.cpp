@@ -10,6 +10,7 @@
 #include "Constraints.hpp"
 #include "FixedGridsTagger.hpp"
 #include "FourthOrderDerivatives.hpp"
+#include "GammaCalculator.hpp"
 #include "KerrBHInitialData.hpp"
 #include "PositiveChiAndLapse.hpp"
 #include "SixthOrderDerivatives.hpp"
@@ -80,6 +81,25 @@ void KerrBHLevel::initData()
                            }
                            kerr_initial_data(ix, iy, iz, state_arrays[box_no]);
                        });
+
+    // Gamma^i needs derivatives of the metric, so it is calculated after the
+    // initial data has been set everywhere (including the ghost cells)
+    if (m_evolution_spatial_derivative_order == 4)
+    {
+        const GammaCalculator<FourthOrderDerivatives> gamma_calculator(
+            Geom().CellSize(0));
+        amrex::ParallelFor(
+            state_new, [=] AMREX_GPU_DEVICE(int box_no, int ix, int iy, int iz)
+            { gamma_calculator(ix, iy, iz, state_arrays[box_no]); });
+    }
+    else if (m_evolution_spatial_derivative_order == 6)
+    {
+        const GammaCalculator<SixthOrderDerivatives> gamma_calculator(
+            Geom().CellSize(0));
+        amrex::ParallelFor(
+            state_new, [=] AMREX_GPU_DEVICE(int box_no, int ix, int iy, int iz)
+            { gamma_calculator(ix, iy, iz, state_arrays[box_no]); });
+    }
 
     amrex::Gpu::streamSynchronize();
 }
