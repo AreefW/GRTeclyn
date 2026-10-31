@@ -84,6 +84,12 @@ KerrBHInitialData::KerrBHInitialData(amrex::Real a_dx) : m_dx(a_dx)
                               m_params.spin_direction[2]};
     m_rotation_matrix =
         CoordinateTransformations::rotation_matrix(spin_dir, z_dir);
+    // Vectors transform with the inverse Jacobian, which for a rotation
+    // is the transpose
+    FOR (i, j)
+    {
+        m_inverse_rotation_matrix(i, j) = m_rotation_matrix(j, i);
+    }
 }
 
 // Computes semi-isotropic Kerr solution as detailed in Liu, Etienne and Shapiro
@@ -130,7 +136,7 @@ KerrBHInitialData::operator()(int ix, int iy, int iz,
     // Rotate symmetric tensors back to original coordinates
     auto h_sym = transform_sym_tensor_LL(cartesian_h_sym, m_rotation_matrix);
     auto A_sym = transform_sym_tensor_LL(cartesian_K_sym, m_rotation_matrix);
-    auto shift = transform_vector(cartesian_shift, m_rotation_matrix);
+    auto shift = transform_vector(cartesian_shift, m_inverse_rotation_matrix);
 
     // Unpack Sym12Rank2 into Rank2 for trace and determinant operations
     Tensor::Rank2 h = make_general_from_symmetric(h_sym);
